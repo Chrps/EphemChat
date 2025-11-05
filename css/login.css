@@ -1,0 +1,49 @@
+.content form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.content label {
+  font-weight: bold;
+}
+
+.separator {
+  text-align: center;
+  margin: 20px 0;
+  position: relative;
+}
+
+.separator::before,
+.separator::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background-color: #ccc;
+}
+
+.separator::before {
+  left: 0;
+}
+
+.separator::after {
+  right: 0;
+}
+
+.separator span {
+  background-color: white;
+  padding: 0 10px;
+  color: #666;
+  font-weight: bold;
+}
+
+.secondary-button {
+  width: 100%;
+  background-color: #6c757d;
+}
+
+.secondary-button:hover {
+  background-color: #5a6268;
+}

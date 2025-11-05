@@ -71,7 +71,9 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
             messageInput.focus();
             return;
         }
-        addMessage(inputText);
+        const username = sessionStorage.getItem('username');
+        const displayName = username || 'Guest';
+        addMessage(`[You (${displayName})] ${inputText}`);
         const encrypted = await encryptMessage(roomKey, inputText);
         console.log('Sending encrypted message:', encrypted);
         sendMessage(JSON.stringify(encrypted));
