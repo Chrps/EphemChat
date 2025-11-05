@@ -11,7 +11,7 @@
             
             if (!username || !password) return;
             
-            // Store user credentials in sessionStorage
+            // Store username in sessionStorage
             sessionStorage.setItem('username', username);
             sessionStorage.setItem('isLoggedIn', 'true');
             
