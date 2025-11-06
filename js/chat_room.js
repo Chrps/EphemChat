@@ -1,5 +1,5 @@
 
-import { joinRoom as trysteroJoinRoom } from '../lib/trystero-torrent.min.js';
+import { joinRoom as trysteroJoinRoom, defaultRelayUrls } from '../lib/trystero-torrent.min.js';
 import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js';
 
 (function() {
@@ -10,14 +10,22 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
     const messageInput = document.getElementById('msg');
     const sendButton = document.getElementById('send');
     const messageList = document.getElementById('messages');
+    const peerList = document.getElementById('peers')
     const currentRoomSpan = document.getElementById('current-room');
     const homeButton = document.getElementById('home-button');
 
     function joinRoom(roomName, roomId, roomKey) {
         currentRoomSpan.textContent = roomName;
-        const relayUrls = ['wss://tracker.webtorrent.dev'];
-        room = trysteroJoinRoom({ appId: 'EphemChat', relayUrls }, roomId);
+        room = trysteroJoinRoom({ appId: 'EphemChat', defaultRelayUrls }, roomId);
+        room.onPeerJoin(() => updatePeerList(room.getPeers()));
+        room.onPeerLeave(() => updatePeerList(room.getPeers()));
+        const peers = room.getPeers();
+        console.log('peers: ', peers)
+        Object.entries(peers).forEach(([id, conn]) => {
+            console.log(id, conn);
+        });
         [sendMessage, onMessage] = room.makeAction('data');
+
         onMessage(async (msg, peerId) => {
             try {
                 console.log('Received encrypted message:', msg);
@@ -27,6 +35,15 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
             } catch {
                 addMessage(`[${peerId}] [decryption failed] ${msg}`);
             }
+        });
+    }
+
+    function updatePeerList(peers) {
+        peerList.innerHTML = '';
+        Object.keys(peers).forEach(peerId => {
+            const li = document.createElement('li');
+            li.textContent = peerId;
+            peerList.appendChild(li);
         });
     }
 

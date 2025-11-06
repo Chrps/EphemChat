@@ -1,3 +1,20 @@
+
+
+.peer-container {
+  align-self: flex-start;
+  margin-left: auto;
+  margin-right: 0;
+  margin-top: 0;
+  min-width: 120px;
+}
+
+#peers {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  min-width: 80px;
+}
 .composer {
   display: flex;
   gap: 8px;
@@ -10,13 +27,6 @@ ul {
   margin: 0;
   display: flex;
   flex-direction: column-reverse;
-}
-
-li {
-  padding: 8px 10px;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  margin-bottom: 8px;
 }
 
 .meta {
