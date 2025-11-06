@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="css/global.css?v=3">
+  <link rel="stylesheet" href="css/login.css?v=3">
+  <title>EphemChat - Login</title>
+</head>
+<body>
+  <header>
+    <h1>EphemChat</h1>
+  </header>
+  <div id="login-container"> 
+    <div class="content">
+      <h2>User Login</h2>
+      <form id="login-form">
+        <label for="username">Username:</label>
+        <input type="text" id="username" required autocomplete="username" />
+        <br />
+
+        <label for="login-password">Password:</label>
+        <input type="password" id="login-password" required autocomplete="current-password" />
+        <br />
+        <button type="submit">Login</button>
+      </form>
+      
+      <div class="separator">
+        <span>OR</span>
+      </div>
+      
+      <button id="guest-button" class="secondary-button">Join as Guest</button>
+    </div>
+  </div>
+  <script src="js/login.js"></script>
+</body>
+</html>

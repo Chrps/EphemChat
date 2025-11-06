@@ -7,10 +7,14 @@
   <link rel="stylesheet" href="css/index.css?v=3">
   <title>EphemChat</title>
 </head>
-<header>
-  <h1>EphemChat</h1>
-</header>
 <body>
+  <header>
+    <h1>EphemChat</h1>
+  </header>
+  <div id="user-status">
+    <span id="current-user"></span>
+    <button id="logout-button">Logout</button>
+  </div>
   <div id="room"> 
     <div class="content">
       <h2>Join or Create Room</h2>
@@ -26,6 +30,6 @@
       </form>
     </div>
   </div>
-  <script type="module" src="js/index.js"></script>
+  <script src="js/index.js"></script>
 </body>
 </html>
