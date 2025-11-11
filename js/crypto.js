@@ -1,26 +1,29 @@
-
-export async function getSalt(roomName) {
+export async function getSalt(name) {
         const enc = new TextEncoder();
-        const data = enc.encode(roomName + 'EphemChatSalt');
+        const data = enc.encode(name + 'EphemChatSalt');
         const hash = await crypto.subtle.digest('SHA-256', data);
         return new Uint8Array(hash);
 }
 
-export async function deriveKey(password, salt) {
+export async function hashPassword(password, salt) {
     const normalized = password.normalize('NFKC');
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-        'raw', enc.encode(normalized), {name: 'PBKDF2'}, false, ['deriveKey']
-    );
-    return window.crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 600000,
-            hash: 'SHA-256'
-        },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
+    return await argon2.hash({
+        pass: normalized,
+        salt: salt,
+        type: argon2.ArgonType.Argon2id,
+        hashLen: 32,
+        time: 3,
+        mem: 1 << 16,
+        parallelism: 4
+    });
+}
+
+export async function deriveKey(password, salt) {
+    const hash = await hashPassword(password, salt);
+    return window.crypto.subtle.importKey(
+        'raw',
+        hash.hash,
+        { name: 'AES-GCM' },
         false,
         ['encrypt', 'decrypt']
     );
@@ -43,3 +46,13 @@ export async function decryptMessage(key, { iv, data }) {
     return dec.decode(plaintext);
 }
 
+export async function getId(name, password) {
+    const salt = await getSalt(name);
+    const hash = await hashPassword(password, salt);
+    const hashHex = Array.from(hash.hash).map(b => b.toString(16).padStart(2, '0')).join('');
+    const toHash = `${name}-${hashHex}`;
+    const enc = new TextEncoder();
+    const shaBuffer = await crypto.subtle.digest('SHA-256', enc.encode(toHash));
+    const shaHex = Array.from(new Uint8Array(shaBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return shaHex;
+}

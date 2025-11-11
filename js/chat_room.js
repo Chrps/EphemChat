@@ -1,24 +1,131 @@
-
-import { joinRoom as trysteroJoinRoom, defaultRelayUrls } from '../lib/trystero-torrent.min.js';
-import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js';
+import { joinRoom as trysteroJoinRoom, defaultRelayUrls, selfId } from '../lib/trystero-torrent.min.js';
+import { deriveKey, encryptMessage, decryptMessage, getSalt, getId } from './crypto.js';
 
 (function() {
     let room = null;
     let sendMessage = null;
     let onMessage = null;
+    const peerStreams = {};
 
     const messageInput = document.getElementById('msg');
     const sendButton = document.getElementById('send');
     const messageList = document.getElementById('messages');
     const peerList = document.getElementById('peers')
     const currentRoomSpan = document.getElementById('current-room');
+    const userIdSpan = document.getElementById('user-id');
     const homeButton = document.getElementById('home-button');
+    const videoContainer = document.getElementById('video-container');
 
-    function joinRoom(roomName, roomId, roomKey) {
+    function addVideoStream(peerId, stream) {
+        let wrapper = document.getElementById('video-wrapper-' + peerId);
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.id = 'video-wrapper-' + peerId;
+            wrapper.className = 'video-wrapper';
+
+            // Label above video
+            const label = document.createElement('div');
+            label.textContent = peerId === selfId ? 'You' : peerId;
+            label.className = 'video-label';
+            wrapper.appendChild(label);
+
+            // Video element
+            const video = document.createElement('video');
+            video.id = 'video-' + peerId;
+            video.className = 'video-stream';
+            video.autoplay = true;
+            video.playsInline = true;
+            wrapper.appendChild(video);
+
+            videoContainer.appendChild(wrapper);
+        }
+        // Always update srcObject
+        const video = document.getElementById('video-' + peerId);
+        if (video) video.srcObject = stream;
+    }
+
+    function removeVideoStream(peerId) {
+        const wrapper = document.getElementById('video-wrapper-' + peerId);
+        if (wrapper && videoContainer.contains(wrapper)) {
+            videoContainer.removeChild(wrapper);
+        }
+    }
+
+    async function joinRoom(roomName, roomId, roomKey) {
+        const selfStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
         currentRoomSpan.textContent = roomName;
         room = trysteroJoinRoom({ appId: 'EphemChat', defaultRelayUrls }, roomId);
-        room.onPeerJoin(() => updatePeerList(room.getPeers()));
-        room.onPeerLeave(() => updatePeerList(room.getPeers()));
+        const localStream = selfStream.clone();
+        localStream.getAudioTracks().forEach(track => localStream.removeTrack(track));
+        addVideoStream(selfId, localStream);
+        // Send own stream to all current peers
+        Object.keys(room.getPeers()).forEach(peerId => {
+            console.log('Sending selfStream to peer (initial):', peerId);
+            room.addStream(selfStream, peerId);
+        });
+
+        userIdSpan.textContent = selfId;
+        const pingIntervals = new Map();
+        const peerLatencies = new Map();
+
+        function updatePeerListWithLatency(peers) {
+            peerList.innerHTML = '';
+            Object.keys(peers).forEach(peerId => {
+                const li = document.createElement('li');
+                const latency = peerLatencies.has(peerId) ? ` (${peerLatencies.get(peerId)}ms)` : '';
+                li.textContent = `${peerId}${latency}`;
+                peerList.appendChild(li);
+            });
+        }
+
+        async function pingAndUpdate(peerId) {
+            try {
+                console.log(room.selfId);
+                const ms = await room.ping(peerId);
+                peerLatencies.set(peerId, ms);
+                updatePeerListWithLatency(room.getPeers());
+                console.log(`ping to ${peerId}: took ${ms}ms`);
+            } catch (e) {
+                console.log(`ping error for ${peerId}:`, e);
+            }
+        }
+
+        room.onPeerStream((stream, peerId) => {
+            console.log('Received stream from', peerId, stream);
+            addVideoStream(peerId, stream);
+            peerStreams[peerId] = stream;
+        });
+
+        room.onPeerJoin(async peerId => {
+            // Send own stream to the new peer
+            console.log('Sending selfStream to new peer:', peerId);
+            room.addStream(selfStream, peerId);
+            // Optionally, resend to all current peers (redundant but safe)
+            Object.keys(room.getPeers()).forEach(id => {
+                if (id !== peerId) {
+                    console.log('Resending selfStream to peer (onPeerJoin):', id);
+                    room.addStream(selfStream, id);
+                }
+            });
+            updatePeerListWithLatency(room.getPeers());
+            await pingAndUpdate(peerId);
+            const intervalId = setInterval(() => pingAndUpdate(peerId), 2000);
+            pingIntervals.set(peerId, intervalId);
+        });
+
+        room.onPeerLeave(peerId => {
+            room.removeStream(selfStream, peerId);
+            removeVideoStream(peerId);
+            delete peerStreams[peerId];
+            updatePeerListWithLatency(room.getPeers());
+            const intervalId = pingIntervals.get(peerId);
+            if (intervalId) {
+                clearInterval(intervalId);
+                pingIntervals.delete(peerId);
+            }
+            peerLatencies.delete(peerId);
+        });
+
         const peers = room.getPeers();
         console.log('peers: ', peers)
         Object.entries(peers).forEach(([id, conn]) => {
@@ -35,15 +142,6 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
             } catch {
                 addMessage(`[${peerId}] [decryption failed] ${msg}`);
             }
-        });
-    }
-
-    function updatePeerList(peers) {
-        peerList.innerHTML = '';
-        Object.keys(peers).forEach(peerId => {
-            const li = document.createElement('li');
-            li.textContent = peerId;
-            peerList.appendChild(li);
         });
     }
 
@@ -98,33 +196,6 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
         messageInput.focus();
     }
 
-    async function getRoomId(roomName, password) {
-        const enc = new TextEncoder();
-        const normalized = password.normalize('NFKC');
-        const keyMaterial = await crypto.subtle.importKey(
-            'raw',
-            enc.encode(normalized),
-            { name: 'PBKDF2' },
-            false,
-            ['deriveBits']
-        );
-
-        const hashBuffer = await crypto.subtle.deriveBits(
-            {
-                name: 'PBKDF2',
-                salt: enc.encode(roomName),
-                iterations: 600000,
-                hash: 'SHA-256'
-            },
-            keyMaterial,
-            128
-        );
-
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return `${roomName}-${hashHex}`;
-    }
-
     homeButton.addEventListener('click', leaveRoom);
     (async () => {
         let password = sessionStorage.getItem('roomPassword');
@@ -134,12 +205,16 @@ import { deriveKey, encryptMessage, decryptMessage, getSalt } from './crypto.js'
             window.location.href = 'index.html';
             return;
         }
+        let user_id = null;
+        if (sessionStorage.getItem('isLoggedIn') === 'true') {
+            user_id = sessionStorage.getItem('username');
+        }
         const salt = await getSalt(roomName);
         const roomKey = await deriveKey(password, salt);
-        const roomId = await getRoomId(roomName, password);
+        const roomId = await getId(roomName, password);
         password = null;
         console.log('Derived room ID:', roomId);
-        joinRoom(roomName, roomId, roomKey);
+        await joinRoom(roomName, roomId, roomKey);
         sendButton.addEventListener('click', () => send(roomKey));
         messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send(roomKey); } });
     })();
